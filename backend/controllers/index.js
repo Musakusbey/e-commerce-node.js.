@@ -1,113 +1,149 @@
-var mongoose = require("mongoose");
-var { siteSchema } = require("../models/site");
-var { productSchema, productCategorySchema } = require("../models/product");
-var { reviewSchema } = require("../models/review");
-var { shopSchema } = require("../models/shop");
-var { userSchema } = require("../models/user");
-
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
-
-const Site = mongoose.model("Site", siteSchema);
-const User = mongoose.model("User", userSchema);
-const Product = mongoose.model("Product", productSchema);
-const ProductCategory = mongoose.model(
-  "ProductCategory",
-  productCategorySchema
-);
-const Shop = mongoose.model("Shop", shopSchema);
-const Review = mongoose.model("Review", reviewSchema);
+const supabase = require('../supabase');
 
 // Retrieve website information
 async function showSite(req, res, next) {
-  res.json(await Site.find({}));
+  const { data, error } = await supabase
+    .from('sites')
+    .select('*');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 // Retrieve all product categories
 async function listAllCategories(req, res, next) {
-  res.json(await ProductCategory.find({}));
+  const { data, error } = await supabase
+    .from('product_categories')
+    .select('*');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 // Retrieve recently created products
 async function listRecentProducts(req, res, next) {
-  res.json(await Product.find({}).sort({ created_at: -1 }).limit(15));
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(15);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 // Retrieve recently created shops
 async function listRecentShops(req, res, next) {
-  res.json(await Shop.find({}).sort({ created_at: -1 }).limit(15));
+  const { data, error } = await supabase
+    .from('shops')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(15);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
-
-// Retrieve all product that belongs to the specified category
-// async function listCategoryProducts(req, res, next) {
-//   const category = await ProductCategory.find({ name: req.query.categoryName });
-//   const products = await Product.find({ categories: category })
-//     .sort({ created_at: -1 })
-//     .limit(15);
-//   res.json(products);
-// }
-
-// Retrieve all product that belongs to the specified shop
-// async function listShopProducts(req, res, next) {
-//   const shop = await Shop.findById(req.query.shopID);
-//   const products = await Product.find({ shop: shop }).sort({ created_at: -1 });
-//   res.json(products);
-// }
 
 // Retrieve one single product category
 async function showCategory(req, res, next) {
-  res.json(await ProductCategory.findById(req.query.categoryID).populate("products"));
+  const { data, error } = await supabase
+    .from('product_categories')
+    .select('*')
+    .eq('id', req.query.categoryID);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 // Retrieve one single shop
 async function showShop(req, res, next) {
-  res.json(await Shop.findById(req.query.shopID).populate("products"));
+  const { data, error } = await supabase
+    .from('shops')
+    .select('*')
+    .eq('id', req.query.shopID);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 // Retrieve one single product
 async function showProduct(req, res, next) {
-  res.json(await Product.findById(req.query.productID).populate("reviews"));
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, reviews(*)')
+    .eq('id', req.query.productID);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 // Add review to a product
 async function addProductReview(req, res, next) {
-  const product = await Product.findById(req.query.productID);
-  const user = await User.findById(req.query.userID);
-  const newReview = await new Review({
-    rating: req.body.rating,
-    content: req.body.content,
-    product: product,
-    user: user,
-  });
-  newReview.save();
+  const { data: product, error: productError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', req.query.productID)
+    .single();
 
-  // update product
-  await Product.findByIdAndUpdate(req.query.productID, {
-    $push: { reviews: newReview },
-  });
+  if (productError) {
+    return res.status(500).json({ error: productError.message });
+  }
 
-  // update user
-  await User.findByIdAndUpdate(req.query.userID, {
-    $push: { reviews: newReview },
-  });
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', req.query.userID)
+    .single();
 
-  res.json(newReview);
+  if (userError) {
+    return res.status(500).json({ error: userError.message });
+  }
+
+  const { data: newReview, error: reviewError } = await supabase
+    .from('reviews')
+    .insert([
+      {
+        rating: req.body.rating,
+        content: req.body.content,
+        product_id: product.id,
+        user_id: user.id,
+      },
+    ]);
+
+  if (reviewError) {
+    return res.status(500).json({ error: reviewError.message });
+  }
+
+  res.json(newReview[0]);
 }
 
-//  Remove product review
+// Remove product review
 async function removeProductReview(req, res, next) {
-  const review = await Review.findByIdAndRemove(req.query.reviewID);
+  const { data: review, error: reviewError } = await supabase
+    .from('reviews')
+    .delete()
+    .eq('id', req.query.reviewID)
+    .single();
 
-  // update product
-  await Product.findByIdAndUpdate(review.product._id, {
-    $pull: { reviews: review._id },
-  });
+  if (reviewError) {
+    return res.status(500).json({ error: reviewError.message });
+  }
 
-  // update user
-  await User.findByIdAndUpdate(review.user._id, {
-    $pull: { reviews: review._id },
-  });
-
-  res.json(newReview);
+  res.json(review);
 }
 
 module.exports = {

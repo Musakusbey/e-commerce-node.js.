@@ -1,40 +1,81 @@
-var mongoose = require("mongoose");
-var { userSchema, roleSchema } = require("../../models/user");
+const supabase = require('../../supabase');
 
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
 
-const Role = mongoose.model("Role", roleSchema);
-const User = mongoose.model("User", userSchema);
 
 // Role Management ==========================================================
 async function listRole(req, res, next) {
-  res.json(await Role.find({}));
+  const { data, error } = await supabase
+    .from('roles')
+    .select('*');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function createRole(req, res, next) {
-  const newRole = new Role(req.body);
-  newRole.save();
-  res.send(newRole);
+  const { data, error } = await supabase
+    .from('roles')
+    .insert([req.body])
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.send(data);
 }
 
 async function updateRole(req, res, next) {
-  res.json(await Role.findByIdAndUpdate(req.query.id, req.body, { new: true }));
+  const { data, error } = await supabase
+    .from('roles')
+    .update(req.body)
+    .eq('id', req.query.id)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function showRole(req, res, next) {
-  res.json(await Role.findById(req.query.id).populate("users"));
+  const { data, error } = await supabase
+    .from('roles')
+    .select('*, users(*)')
+    .eq('id', req.query.id)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function deleteRole(req, res, next) {
-  res.json(await Role.findByIdAndDelete(req.query.id));
+  const { data, error } = await supabase
+    .from('roles')
+    .delete()
+    .eq('id', req.query.id)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 // User Management ==========================================================
 async function listUser(req, res, next) {
-  res.json(await User.find({}).populate("shop").populate("role", "name"));
-}
+  const { data, error } = await supabase
+    .from('users')
+    .select('*, shop(*), role(name)');
 
-// var { hashPass } = require("../../auth");
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
+}
 
 // const createUser = async function (req, res, next) {
 //   if ((await User.findOne({ email: req.body.email })) !== null) {
@@ -46,21 +87,27 @@ async function listUser(req, res, next) {
 //     // Admin can pick user's role when creating a new user
 //     const userRole = await Role.findOne({ name: req.body.role });
 
-//     const newUser = new User({
-//       username: req.body.username,
-//       email: req.body.email,
-//       password: hashedPass,
-//       role: userRole._id,
-//     });
+//     const { data: newUser, error: newUserError } = await supabase
+//       .from('users')
+//       .insert([
+//         {
+//           username: req.body.username,
+//           email: req.body.email,
+//           password: hashedPass,
+//           role_id: userRole.id,
+//         },
+//       ])
+//       .single();
 
-//     newUser.save();
+//     if (newUserError) {
+//       return res.status(500).json({ error: newUserError.message });
+//     }
 
 //     // Add the user to the corresponding role
-//     const updatedRole = await Role.findOneAndUpdate(
-//       { name: req.body.role },
-//       { $push: { users: newUser._id } },
-//       { new: true }
-//     );
+//     await supabase
+//       .from('roles')
+//       .update({ users: [...userRole.users, newUser.id] })
+//       .eq('id', userRole.id);
 
 //     res.send({ newUser, updatedRole });
 //   }
@@ -70,40 +117,75 @@ async function updateUser(req, res, next) {
   // Admin can only change user's role
 
   // Remove the user from the old role
-  const oldUser = await User.findById(req.query.id);
-  const updatedOldRole = await Role.findByIdAndUpdate(
-    oldUser.role,
-    { $pull: { users: oldUser._id } },
-    { new: true }
-  );
+  const { data: oldUser, error: oldUserError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', req.query.id)
+    .single();
 
-  const newRole = await Role.findOne({ name: req.body.role });
+  if (oldUserError || !oldUser) {
+    return res.status(500).json({ error: oldUserError.message });
+  }
+
+  await supabase
+    .from('roles')
+    .update({ users: oldUser.role.users.filter(userId => userId !== oldUser.id) })
+    .eq('id', oldUser.role.id);
+
+  const { data: newRole, error: newRoleError } = await supabase
+    .from('roles')
+    .select('*')
+    .eq('name', req.body.role)
+    .single();
+
+  if (newRoleError) {
+    return res.status(500).json({ error: newRoleError.message });
+  }
 
   // Update the user model
-  const updatedUser = await User.findByIdAndUpdate(
-    req.query.id,
-    { role: newRole._id },
-    { new: true }
-  );
+  const { data: updatedUser, error: updateUserError } = await supabase
+    .from('users')
+    .update({ role_id: newRole.id })
+    .eq('id', req.query.id)
+    .single();
+
+  if (updateUserError) {
+    return res.status(500).json({ error: updateUserError.message });
+  }
 
   // Add the user to the new role
-  const updatedNewRole = await Role.findOneAndUpdate(
-    { name: req.body.role },
-    { $push: { users: updatedUser._id } },
-    { new: true }
-  );
+  await supabase
+    .from('roles')
+    .update({ users: [...newRole.users, updatedUser.id] })
+    .eq('id', newRole.id);
 
   res.json(updatedUser);
 }
 
 async function showUser(req, res, next) {
-  res.json(
-    await User.findById(req.query.userID).populate("shop").populate("role", "name")
-  );
+  const { data, error } = await supabase
+    .from('users')
+    .select('*, shop(*), role(name)')
+    .eq('id', req.query.userID)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function deleteUser(req, res, next) {
-  res.json(await User.findByIdAndDelete(req.query.userID));
+  const { data, error } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', req.query.userID)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 module.exports = {

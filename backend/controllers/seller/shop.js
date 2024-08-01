@@ -1,63 +1,73 @@
-var mongoose = require("mongoose");
-var { userSchema } = require("../../models/user");
-var { shopSchema } = require("../../models/shop");
-
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
-
-const User = mongoose.model("User", userSchema);
-const Shop = mongoose.model("Shop", shopSchema);
+const supabase = require('../../supabase');
 
 // Create new shop
 async function createShop(req, res, next) {
-  const newShop = new Shop({
-    name: req.body.name,
-    user: req.query.userID,
-    phone: req.body.phone,
-    email: req.body.email,
-    description: req.body.description,
-    address: {
-      country: req.body.country,
-      province: req.body.province,
-      city: req.body.city,
-      postCode: req.body.postCode,
-      street: req.body.street,
-    },
-  });
+  const { data: newShop, error: shopError } = await supabase
+    .from('shops')
+    .insert({
+      name: req.body.name,
+      user_id: req.query.userID,
+      phone: req.body.phone,
+      email: req.body.email,
+      description: req.body.description,
+      address: {
+        country: req.body.country,
+        province: req.body.province,
+        city: req.body.city,
+        postCode: req.body.postCode,
+        street: req.body.street,
+      },
+    })
+    .single();
 
-  newShop.save();
+  if (shopError) {
+    return res.status(500).json({ error: shopError.message });
+  }
 
   // If there is a new logo
   if (req.file) {
-    const path = /(\/uploads)(.+)/g.exec(req.file.path)[0];
-    // console.log(path);
-    await Shop.findByIdAndUpdate(newShop._id, { logo: path });
+    const { error: logoError } = await supabase
+      .from('shops')
+      .update({ logo: req.file.path }) // req.file.path doğru olmalı
+      .eq('id', newShop.id);
+
+    if (logoError) {
+      return res.status(500).json({ error: logoError.message });
+    }
   }
 
   // Add shop to the user
-  await User.findByIdAndUpdate(req.query.userID, { shop: newShop._id });
+  const { error: userError } = await supabase
+    .from('users')
+    .update({ shop_id: newShop.id })
+    .eq('id', req.query.userID);
+
+  if (userError) {
+    return res.status(500).json({ error: userError.message });
+  }
 
   res.send("Shop Created!");
 }
 
 // Show shop
 async function showShop(req, res, next) {
-  // console.log(req.query)
-  if (req.query.withProducts == "true") {
-    res.json(await Shop.findById(req.query.shopID).populate("products"));
-  } else {
-    res.json(await Shop.findById(req.query.shopID));
+  let query = supabase
+    .from('shops')
+    .select(req.query.withProducts === "true" ? '*, products(*)' : '*')
+    .eq('id', req.query.shopID)
+    .single();
+
+  const { data: shop, error } = await query;
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
   }
+  res.json(shop);
 }
 
 // Update Shop
 async function updateShop(req, res, next) {
-  // If there is a new logo
-  if (req.file) {
-    const path = /(\/uploads)(.+)/g.exec(req.file.path)[0];
-    // console.log(path);
-    await Shop.findByIdAndUpdate(req.query.shopID, { logo: path });
-  }
-  await Shop.findByIdAndUpdate(req.query.shopID, {
+  let updateData = {
     name: req.body.name,
     phone: req.body.phone,
     email: req.body.email,
@@ -69,20 +79,57 @@ async function updateShop(req, res, next) {
       postCode: req.body.postCode,
       street: req.body.street,
     },
-  });
+  };
+
+  // If there is a new logo
+  if (req.file) {
+    updateData.logo = req.file.path; // req.file.path doğru olmalı
+  }
+
+  const { error: updateError } = await supabase
+    .from('shops')
+    .update(updateData)
+    .eq('id', req.query.shopID);
+
+  if (updateError) {
+    return res.status(500).json({ error: updateError.message });
+  }
 
   res.send("Shop Updated!");
 }
 
 // Delete Shop
 async function deleteShop(req, res, next) {
-  const shop = await Shop.findById(req.query.shopID);
+  const { data: shop, error: shopError } = await supabase
+    .from('shops')
+    .select('*')
+    .eq('id', req.query.shopID)
+    .single();
+
+  if (shopError) {
+    return res.status(500).json({ error: shopError.message });
+  }
+
   // Update user, remove shop from user
-  await User.findByIdAndUpdate(shop.user, {
-    $unset: { shop: 1 },
-  });
+  const { error: userError } = await supabase
+    .from('users')
+    .update({ shop_id: null })
+    .eq('id', shop.user_id);
+
+  if (userError) {
+    return res.status(500).json({ error: userError.message });
+  }
+
   // Delete Shop
-  await Shop.findByIdAndRemove(req.query.shopID);
+  const { error: deleteError } = await supabase
+    .from('shops')
+    .delete()
+    .eq('id', req.query.shopID)
+    .single();
+
+  if (deleteError) {
+    return res.status(500).json({ error: deleteError.message });
+  }
 
   res.send("Shop Deleted!");
 }

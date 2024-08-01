@@ -1,22 +1,43 @@
-var mongoose = require("mongoose");
-var { shopSchema } = require("../../models/shop");
+const supabase = require('../../supabase');
 
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
-const Shop = mongoose.model("Shop", shopSchema);
+
 
 // Shop Management ===================================================
 async function listShop(req, res, next) {
-  res.json(await Shop.find({}).populate("user", "username"));
+  const { data, error } = await supabase
+    .from('shops')
+    .select('*, user(username)');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function showShop(req, res, next) {
-  res.json(
-    await Shop.findById(req.query.shopID)
-  );
+  const { data, error } = await supabase
+    .from('shops')
+    .select('*')
+    .eq('id', req.query.shopID)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function deleteShop(req, res, next) {
-  res.json(await Shop.findByIdAndDelete(req.query.id));
+  const { data, error } = await supabase
+    .from('shops')
+    .delete()
+    .eq('id', req.query.id)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 module.exports = {

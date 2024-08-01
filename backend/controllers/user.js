@@ -1,67 +1,82 @@
-var mongoose = require("mongoose");
-var { userSchema, roleSchema } = require("../models/user");
-
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
-
-const User = mongoose.model("User", userSchema);
-const Role = mongoose.model("Role", roleSchema);
+const supabase = require('../supabase');
+var { hashPass, authUser } = require("../auth");
+const jwt = require("jsonwebtoken");
 
 // User Registration
-var { hashPass } = require("../auth");
-
 async function userRegister(req, res, next) {
-  // Check if the user exist
-  if ((await User.findOne({ email: req.body.email })) !== null) {
+  // Check if the user exists
+  const { data: existingUser, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', req.body.email)
+    .single();
+
+  if (existingUser) {
     res.send("There is an existing account associated with this email.");
   } else {
     // Hash password
     const hashedPass = await hashPass(req.body.password);
 
     // Assign "user" role to the new user
-    const userRole = await Role.findOne({ name: "user" });
+    const { data: userRole, error: roleError } = await supabase
+      .from('roles')
+      .select('*')
+      .eq('name', 'user')
+      .single();
 
-    const newUser = new User({
-      username: req.body.username,
-      email: req.body.email,
-      password: hashedPass,
-      role: userRole._id,
+    const { data: newUser, error: newUserError } = await supabase
+      .from('users')
+      .insert([
+        {
+          username: req.body.username,
+          email: req.body.email,
+          password: hashedPass,
+          role_id: userRole.id,
+          name: "",
+          avatar: "",
+          phone: "",
+          address: {
+            country: "",
+            province: "",
+            city: "",
+            postCode: "",
+            street: "",
+          },
+        },
+      ])
+      .single();
 
-      name: "",
-      avatar: "",
-      phone: "",
-      address: {
-        country: "",
-        province: "",
-        city: "",
-        postCode: "",
-        street: "",
-      },
-    });
-
-    newUser.save();
+    if (newUserError) {
+      return res.status(500).json({ error: newUserError.message });
+    }
 
     // Add the user to the "user" role
-    const updatedRole = await Role.findOneAndUpdate(
-      { name: "user" },
-      { $push: { users: newUser._id } },
-      { new: true }
-    );
+    await supabase
+      .from('roles')
+      .update({ users: [...userRole.users, newUser.id] })
+      .eq('id', userRole.id);
 
     res.json(newUser);
   }
 }
 
 // User Login
-var { authUser } = require("../auth");
-const jwt = require("jsonwebtoken");
-
 async function userLogin(req, res, next) {
-  const user = await User.findOne({ email: req.body.email }).populate("role");
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('*, role(*)')
+    .eq('email', req.body.email)
+    .single();
+
+  if (userError || !user) {
+    return res.send("Username or password not correct.");
+  }
+
   const match = await authUser(req.body.password, user.password);
-  if (match == true) {
+  if (match) {
     const token = jwt.sign(
       {
-        id: user._id,
+        id: user.id,
         role: user.role.name,
       },
       process.env.JWT_KEY
@@ -75,15 +90,29 @@ async function userLogin(req, res, next) {
 // Change user password
 async function changePass(req, res, next) {
   // Verify old password
-  const user = await User.findOne({ email: req.body.email });
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', req.body.email)
+    .single();
+
+  if (userError || !user) {
+    return res.send("Wrong password!");
+  }
+
   const match = await authUser(req.body.oldPassword, user.password);
-  if (match == true) {
+  if (match) {
     const hashedNewPass = await hashPass(req.body.newPassword);
-    const updatedUser = await User.findOneAndUpdate(
-      { email: req.body.email },
-      { password: hashedNewPass },
-      { new: true }
-    );
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ password: hashedNewPass })
+      .eq('email', req.body.email)
+      .single();
+
+    if (updateError) {
+      return res.status(500).json({ error: updateError.message });
+    }
+
     res.json(updatedUser);
   } else {
     res.send("Wrong password!");
@@ -92,30 +121,34 @@ async function changePass(req, res, next) {
 
 // Show user profile
 async function showUser(req, res, next) {
-  res.json(
-    await User.findById(req.query.userID).select(
-      "-password -role"
-    )
-  );
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*, -password, -role')
+    .eq('id', req.query.userID)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(user);
 }
 
 // Update user profile
 async function updateUser(req, res, next) {
   try {
     // If there is a new avatar
+    let avatarPath = null;
     if (req.file) {
-      const path = /(\/uploads)(.+)/g.exec(req.file.path)[0];
-      // console.log(path);
-      await User.findByIdAndUpdate(
-        req.query.userID,
-        { avatar: path },
-        { new: true }
-      );
+      avatarPath = req.file.path; // Path update
+      await supabase
+        .from('users')
+        .update({ avatar: avatarPath })
+        .eq('id', req.query.userID);
     }
 
-    await User.findByIdAndUpdate(
-      req.query.userID,
-      {
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({
         name: req.body.name,
         username: req.body.username,
         email: req.body.email,
@@ -127,15 +160,20 @@ async function updateUser(req, res, next) {
           postCode: req.body.postCode,
           street: req.body.street,
         },
-      },
-      { new: true }
-    );
+      })
+      .eq('id', req.query.userID)
+      .single();
+
+    if (updateError) {
+      return res.status(500).json({ error: updateError.message });
+    }
 
     res.send("User Updated!");
   } catch (e) {
     console.log(e);
   }
 }
+
 module.exports = {
   userRegister,
   userLogin,

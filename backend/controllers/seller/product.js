@@ -1,51 +1,22 @@
-var mongoose = require("mongoose");
-var { productSchema, productCategorySchema } = require("../../models/product");
-var { shopSchema } = require("../../models/shop");
-
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
-
-const Product = mongoose.model("Product", productSchema);
-const ProductCategory = mongoose.model(
-  "ProductCategory",
-  productCategorySchema
-);
-const Shop = mongoose.model("Shop", shopSchema);
+const supabase = require('../../supabase');
 
 // Create Product
 async function createProduct(req, res, next) {
-  const newProduct = new Product({
-    name: req.body.name,
-    price: req.body.price,
-    description: req.body.description,
-    shop: req.query.shopID,
-  });
-  newProduct.save();
+  // Create new product
+  const { data: newProduct, error: productError } = await supabase
+    .from('products')
+    .insert({
+      name: req.body.name,
+      price: req.body.price,
+      description: req.body.description,
+      shop_id: req.query.shopID,
+      categories: req.body.categories.match(/\w+/g), // Assuming categories are sent as a space-separated string
+      images: req.files ? req.files.map(file => `/uploads/${file.filename}`) : []
+    })
+    .single();
 
-  const productID = newProduct._id;
-
-  // Add product to shop
-  await Shop.findByIdAndUpdate(req.query.shopID, {
-    $push: { products: productID },
-  });
-
-  // Add categories
-  let categories = req.body.categories;
-  categories = categories.match(/\w+/g);
-  // console.log(categories);
-
-  for (let i = 0; i < categories.length; i++) {
-    const categoryID = categories[i];
-    addProductCategory(productID, categoryID);
-  }
-
-  // Add images
-  if (req.files) {
-    let i = 0;
-    for (i = 0; i < req.files.length; i++) {
-      const image = req.files[i];
-      const path = /(\/uploads)(.+)/g.exec(image.path)[0];
-      addProductImage(productID, path);
-    }
+  if (productError) {
+    return res.status(500).json({ error: productError.message });
   }
 
   res.json(newProduct);
@@ -53,56 +24,35 @@ async function createProduct(req, res, next) {
 
 // Show Product
 async function showProduct(req, res, next) {
-  res.json(
-    await Product.findById(req.query.productID).populate("categories", "name")
-  );
+  const { data: product, error } = await supabase
+    .from('products')
+    .select('*, categories(name)')
+    .eq('id', req.query.productID)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json(product);
 }
 
 // Update Product
 async function updateProduct(req, res, next) {
-  const updatedProduct = await Product.findByIdAndUpdate(
-    req.query.productID,
-    {
+  const { data: updatedProduct, error: updateError } = await supabase
+    .from('products')
+    .update({
       name: req.body.name,
       price: req.body.price,
       description: req.body.description,
-    },
-    { new: false }
-  );
+      categories: req.body.categories.match(/\w+/g),
+      images: req.files ? req.files.map(file => `/uploads/${file.filename}`) : []
+    })
+    .eq('id', req.query.productID)
+    .single();
 
-  if (req.body.categories) {
-    // Remove old categories
-    let oldCategories = updatedProduct.categories;
-    console.log(oldCategories);
-    for (let i = 0; i < oldCategories.length; i++) {
-      const categoryID = oldCategories[i]._id;
-      await removeProductCategory(req.query.productID, categoryID);
-    }
-
-    // Add new categories
-    let newCategories = req.body.categories;
-    newCategories = newCategories.match(/\w+/g);
-
-    for (let i = 0; i < newCategories.length; i++) {
-      const categoryID = newCategories[i];
-      console.log(categoryID);
-      await addProductCategory(req.query.productID, categoryID);
-    }
-  }
-
-  // Update images
-  if (req.files.length != 0) {
-    // Remove product images
-    removeProductImages(req.query.productID);
-
-    // Add product images
-    let i = 0;
-    for (i = 0; i < req.files.length; i++) {
-      const image = req.files[i];
-      const path = /(\/uploads)(.+)/g.exec(image.path)[0];
-      console.log(path);
-      addProductImage(req.query.productID, path);
-    }
+  if (updateError) {
+    return res.status(500).json({ error: updateError.message });
   }
 
   res.json(updatedProduct);
@@ -110,57 +60,85 @@ async function updateProduct(req, res, next) {
 
 // Delete Product
 async function deleteProduct(req, res, next) {
-  const deletedProduct = await Product.findByIdAndRemove(req.query.productID);
+  const { data: deletedProduct, error: deleteError } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', req.query.productID)
+    .single();
 
-  // Remove product from shop
-  await Shop.findByIdAndUpdate(deletedProduct.shop._id, {
-    $pull: { products: deletedProduct._id },
-  });
-
-  // Remove product from categories
-  for (let i = 0; i < deletedProduct.categories.length; i++) {
-    const categoryID = deletedProduct.categories[i];
-    await ProductCategory.findByIdAndUpdate(categoryID, {
-      $pull: { products: req.query.productID },
-    });
+  if (deleteError) {
+    return res.status(500).json({ error: deleteError.message });
   }
+
   res.send("Product Deleted!");
 }
 
 // Add product category
 async function addProductCategory(productID, categoryID) {
-  // update product
-  await Product.findByIdAndUpdate(productID, {
-    $push: { categories: categoryID },
-  });
+  const { data: product, error } = await supabase
+    .from('products')
+    .select('categories')
+    .eq('id', productID)
+    .single();
 
-  // update product category
-  await ProductCategory.findByIdAndUpdate(categoryID, {
-    $push: { products: productID },
-  });
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const updatedCategories = [...product.categories, categoryID];
+
+  await supabase
+    .from('products')
+    .update({ categories: updatedCategories })
+    .eq('id', productID);
 }
 
 // Remove product category
 async function removeProductCategory(productID, categoryID) {
-  // update product
-  await Product.findByIdAndUpdate(productID, {
-    $pull: { categories: categoryID },
-  });
+  const { data: product, error } = await supabase
+    .from('products')
+    .select('categories')
+    .eq('id', productID)
+    .single();
 
-  // update product category
-  await ProductCategory.findByIdAndUpdate(categoryID, {
-    $pull: { products: productID },
-  });
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const updatedCategories = product.categories.filter(cat => cat !== categoryID);
+
+  await supabase
+    .from('products')
+    .update({ categories: updatedCategories })
+    .eq('id', productID);
 }
 
 // Add product image
 async function addProductImage(productID, path) {
-  await Product.findByIdAndUpdate(productID, { $push: { images: path } });
+  const { data: product, error } = await supabase
+    .from('products')
+    .select('images')
+    .eq('id', productID)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const updatedImages = [...product.images, path];
+
+  await supabase
+    .from('products')
+    .update({ images: updatedImages })
+    .eq('id', productID);
 }
 
 // Remove product images
 async function removeProductImages(productID) {
-  await Product.findByIdAndUpdate(productID, { images: [] });
+  await supabase
+    .from('products')
+    .update({ images: [] })
+    .eq('id', productID);
 }
 
 module.exports = {

@@ -1,31 +1,55 @@
-var mongoose = require("mongoose");
-const { Schema } = mongoose;
+const supabase = require('../supabase');
 
-const shopSchema = new Schema(
-  {
-    name: { type: String, required: true },
-    logo: { type: String },
-    phone: { type: String },
-    email: { type: String },
-    description: { type: String },
-    address: {
-      country: { type: String },
-      province: { type: String },
-      city: { type: String },
-      postCode: { type: String },
-      street: { type: String },
-    },
-    user: { type: Schema.Types.ObjectId, ref: "User" },
-    products: [{ type: Schema.Types.ObjectId, ref: "Product" }],
-  },
-  {
-    timestamps: {
-      createdAt: "created_at",
-      updatedAt: "updated_at",
-    },
-  }
-);
+// Create Shop
+async function createShop(shop) {
+  const { data, error } = await supabase
+    .from('shop')
+    .insert([shop])
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Get Shop by ID
+async function getShopById(shopId) {
+  const { data, error } = await supabase
+    .from('shop')
+    .select('*, user(*), products(*)')
+    .eq('id', shopId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Update Shop
+async function updateShop(shopId, updates) {
+  const { data, error } = await supabase
+    .from('shop')
+    .update(updates)
+    .eq('id', shopId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Delete Shop
+async function deleteShop(shopId) {
+  const { data, error } = await supabase
+    .from('shop')
+    .delete()
+    .eq('id', shopId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
 
 module.exports = {
-  shopSchema,
+  createShop,
+  getShopById,
+  updateShop,
+  deleteShop,
 };

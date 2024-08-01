@@ -1,59 +1,99 @@
-var mongoose = require("mongoose");
-var { productCategorySchema, productSchema } = require("../../models/product");
+const supabase = require('../../supabase');
 
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
 
-const ProductCategory = mongoose.model(
-  "ProductCategory",
-  productCategorySchema
-);
-const Product = mongoose.model("Product", productSchema);
-
+// Product Category Management =============================================
 async function listProductCategory(req, res, next) {
-  res.json(await ProductCategory.find({}));
+  const { data, error } = await supabase
+    .from('product_categories')
+    .select('*');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function createProductCategory(req, res, next) {
-  const newProductCategory = new ProductCategory({
-    name: req.body.name,
-  });
-  newProductCategory.save();
-  res.send(newProductCategory);
+  const { data, error } = await supabase
+    .from('product_categories')
+    .insert([{ name: req.body.name }]);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 async function updateProductCategory(req, res, next) {
-  res.json(
-    await ProductCategory.findByIdAndUpdate(
-      req.query.id,
-      {
-        name: req.body.name,
-      },
-      {
-        new: true,
-      }
-    )
-  );
+  const { data, error } = await supabase
+    .from('product_categories')
+    .update({ name: req.body.name })
+    .eq('id', req.query.id);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 async function showProductCategory(req, res, next) {
-  res.json(await ProductCategory.findById(req.query.id).populate("products"));
+  const { data, error } = await supabase
+    .from('product_categories')
+    .select('*, products(*)')
+    .eq('id', req.query.id);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 async function deleteProductCategory(req, res, next) {
-  res.json(await ProductCategory.findByIdAndDelete(req.query.id));
+  const { data, error } = await supabase
+    .from('product_categories')
+    .delete()
+    .eq('id', req.query.id);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 // Product Management =======================================================
 async function listProduct(req, res, next) {
-  res.json(await Product.find({}).populate("categories"));
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, categories(*)');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function showProduct(req, res, next) {
-  res.json(await Product.findById(req.query.productID));
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', req.query.productID);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 async function deleteProduct(req, res, next) {
-  res.json(await Product.findByIdAndDelete(req.query.id));
+  const { data, error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', req.query.id);
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data[0]);
 }
 
 module.exports = {

@@ -1,49 +1,67 @@
 const multer = require("multer");
-const fs = require("fs");
+const supabase = require('./supabase');
 
-// File name
-const fileName = function (req, file, cb) {
-  const extArray = file.mimetype.split("/");
-  const extension = extArray[extArray.length - 1];
-  const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-  cb(null, file.fieldname + "-" + uniqueSuffix + "." + extension);
+// Multer storage settings
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
+// Upload file to Supabase Storage
+const uploadToSupabase = async (bucket, file) => {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(file.originalname, file.buffer, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const { publicURL } = supabase.storage.from(bucket).getPublicUrl(file.originalname);
+  return publicURL;
 };
 
-// Storage
-const storageShopLogo = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const path = process.env.PUBLIC_DIR + `/uploads/shop/`;
-    fs.mkdirSync(path, { recursive: true });
-    return cb(null, path);
-  },
-  filename: fileName,
-});
+// Middleware functions for different types of uploads
+const uploadShopLogo = async (req, res, next) => {
+  try {
+    if (req.file) {
+      req.file.publicUrl = await uploadToSupabase("shop-logos", req.file);
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
-const storageProductImage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const path = process.env.PUBLIC_DIR + `/uploads/product/`;
-    fs.mkdirSync(path, { recursive: true });
-    return cb(null, path);
-  },
-  filename: fileName,
-});
+const uploadProductImage = async (req, res, next) => {
+  try {
+    if (req.files) {
+      req.files.publicUrls = [];
+      for (const file of req.files) {
+        const publicUrl = await uploadToSupabase("product-images", file);
+        req.files.publicUrls.push(publicUrl);
+      }
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
-const storageUserAvatar = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const path = process.env.PUBLIC_DIR + `/uploads/user`;
-    fs.mkdirSync(path, { recursive: true });
-    return cb(null, path);
-  },
-  filename: fileName,
-});
-
-// Uploads
-const uploadShopLogo = multer({ storage: storageShopLogo });
-const uploadProductImage = multer({ storage: storageProductImage });
-const uploadUserAvatar = multer({ storage: storageUserAvatar });
+const uploadUserAvatar = async (req, res, next) => {
+  try {
+    if (req.file) {
+      req.file.publicUrl = await uploadToSupabase("user-avatars", req.file);
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
 module.exports = {
-  uploadShopLogo,
-  uploadProductImage,
-  uploadUserAvatar,
+  uploadShopLogo: [upload.single("logo"), uploadShopLogo],
+  uploadProductImage: [upload.array("images"), uploadProductImage],
+  uploadUserAvatar: [upload.single("avatar"), uploadUserAvatar],
 };

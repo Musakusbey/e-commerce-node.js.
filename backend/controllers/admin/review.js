@@ -1,23 +1,43 @@
-var mongoose = require("mongoose");
-var { reviewSchema } = require("../../models/review");
+const supabase = require('../../supabase');
 
-mongoose.connect("mongodb://admin:password@localhost:27017/ecommerce");
 
-const Review = mongoose.model("Review", reviewSchema);
 
-// Product Review Management
+// Product Review Management 
 async function listReview(req, res, next) {
-  res.json(await Review.find({}).populate("user").populate("product"));
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('*, user(*), product(*)');
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function showReview(req, res, next) {
-  res.json(
-    await Review.findById(req.query.id).populate("user").populate("product")
-  );
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('*, user(*), product(*)')
+    .eq('id', req.query.id)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 async function deleteReview(req, res, next) {
-  res.json(await Review.findByIdAndDelete(req.query.id));
+  const { data, error } = await supabase
+    .from('reviews')
+    .delete()
+    .eq('id', req.query.id)
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+  res.json(data);
 }
 
 module.exports = {

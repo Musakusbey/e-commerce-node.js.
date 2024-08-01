@@ -1,37 +1,103 @@
-var mongoose = require("mongoose");
-const { Schema } = mongoose;
+const supabase = require('../supabase');
 
-const productSchema = new Schema(
-  {
-    name: { type: String, required: true },
-    images: [{ type: String }],
-    price: { type: String, required: true },
-    description: { type: String },
-    categories: [{ type: Schema.Types.ObjectId, ref: "ProductCategory" }],
-    shop: { type: Schema.Types.ObjectId, ref: "Shop" },
-    reviews: [{ type: Schema.Types.ObjectId, ref: "Review" }],
-  },
-  {
-    timestamps: {
-      createdAt: "created_at",
-      updatedAt: "updated_at",
-    },
-  }
-);
+// Create Product
+async function createProduct(data) {
+  const { data: product, error } = await supabase
+    .from('Product')
+    .insert([data])
+    .single();
 
-const productCategorySchema = new Schema(
-  {
-    name: { type: String },
-    products: [{ type: Schema.Types.ObjectId, ref: "Product" }],
-  },
-  {
-    timestamps: {
-      createdAt: "created_at",
-    },
-  }
-);
+  if (error) throw error;
+  return product;
+}
+
+// Get Product by ID
+async function getProductById(productId) {
+  const { data: product, error } = await supabase
+    .from('Product')
+    .select('*, ProductCategory(*), Review(*)')
+    .eq('id', productId)
+    .single();
+
+  if (error) throw error;
+  return product;
+}
+
+// Update Product by ID
+async function updateProduct(productId, data) {
+  const { data: product, error } = await supabase
+    .from('Product')
+    .update(data)
+    .eq('id', productId)
+    .single();
+
+  if (error) throw error;
+  return product;
+}
+
+// Delete Product by ID
+async function deleteProduct(productId) {
+  const { data, error } = await supabase
+    .from('Product')
+    .delete()
+    .eq('id', productId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Add Category to Product
+async function addCategoryToProduct(productId, categoryId) {
+  const { data, error } = await supabase
+    .from('Product_ProductCategory')
+    .insert([{ product_id: productId, category_id: categoryId }]);
+
+  if (error) throw error;
+  return data;
+}
+
+// Remove Category from Product
+async function removeCategoryFromProduct(productId, categoryId) {
+  const { data, error } = await supabase
+    .from('Product_ProductCategory')
+    .delete()
+    .eq('product_id', productId)
+    .eq('category_id', categoryId);
+
+  if (error) throw error;
+  return data;
+}
+
+// Add Image to Product
+async function addProductImage(productId, path) {
+  const { data, error } = await supabase
+    .from('Product')
+    .update({ images: supabase.rpc('array_append', { array: 'images', value: path }) })
+    .eq('id', productId);
+
+  if (error) throw error;
+  return data;
+}
+
+// Remove Product Images
+async function removeProductImages(productId) {
+  const { data, error } = await supabase
+    .from('Product')
+    .update({ images: [] })
+    .eq('id', productId);
+
+  if (error) throw error;
+  return data;
+}
 
 module.exports = {
-  productSchema,
-  productCategorySchema,
+  createProduct,
+  getProductById,
+  updateProduct,
+  deleteProduct,
+  addCategoryToProduct,
+  removeCategoryFromProduct,
+  addProductImage,
+  removeProductImages
 };
