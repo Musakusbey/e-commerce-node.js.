@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "name": "backend",
   "version": "0.0.0",
   "private": true,
@@ -34,5 +35,24 @@
   },
   "devDependencies": {
     "npm-watch": "^0.11.0"
+=======
+  "name": "ecommerce",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-graphql": "^0.12.0",
+    "graphql": "^15.9.0",
+    "pg": "^8.12.0"
+>>>>>>> 62cd901329bdddc97c73cde9684427870396be49
   }
 }
