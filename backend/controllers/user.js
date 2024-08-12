@@ -4,150 +4,178 @@ const jwt = require("jsonwebtoken");
 
 // User Registration
 async function userRegister(req, res, next) {
-  // Check if the user exists
-  const { data: existingUser, error: userError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('email', req.body.email)
-    .single();
+  try {
+    console.log('Request body:', req.body);
 
-  if (existingUser) {
-    res.send("There is an existing account associated with this email.");
-  } else {
-    // Hash password
-    const hashedPass = await hashPass(req.body.password);
-
-    // Assign "user" role to the new user
-    const { data: userRole, error: roleError } = await supabase
-      .from('roles')
+    // Check if the user exists
+    const { data: existingUsers, error: userError } = await supabase
+      .from('user')
       .select('*')
-      .eq('name', 'user')
-      .single();
+      .eq('email', req.body.email);
 
-    const { data: newUser, error: newUserError } = await supabase
-      .from('users')
-      .insert([
-        {
-          username: req.body.username,
-          email: req.body.email,
-          password: hashedPass,
-          role_id: userRole.id,
-          name: "",
-          avatar: "",
-          phone: "",
-          address: {
-            country: "",
-            province: "",
-            city: "",
-            postCode: "",
-            street: "",
-          },
-        },
-      ])
-      .single();
+    console.log('Existing users:', existingUsers, 'User error:', userError);
 
-    if (newUserError) {
-      return res.status(500).json({ error: newUserError.message });
+    if (userError) {
+      return res.status(500).json({ error: userError.message });
     }
 
-    // Add the user to the "user" role
-    await supabase
-      .from('roles')
-      .update({ users: [...userRole.users, newUser.id] })
-      .eq('id', userRole.id);
+    if (existingUsers.length > 0) {
+      return res.status(400).send("There is an existing account associated with this email.");
+    } else {
+      // Hash password
+      const hashedPass = await hashPass(req.body.password);
+      console.log('Hashed password:', hashedPass);
 
-    res.json(newUser);
+      const { data: newUser, error: newUserError } = await supabase
+        .from('user')
+        .insert([
+          {
+            username: req.body.username,
+            email: req.body.email,
+            password: hashedPass,
+          },
+        ])
+        .single();
+
+      console.log('New user:', newUser, 'New user error:', newUserError);
+
+      if (newUserError) {
+        return res.status(500).json({ error: newUserError.message });
+      }
+
+      res.json(newUser);
+    }
+  } catch (e) {
+    console.error('Registration error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 }
 
 // User Login
 async function userLogin(req, res, next) {
-  const { data: user, error: userError } = await supabase
-    .from('users')
-    .select('*, role(*)')
-    .eq('email', req.body.email)
-    .single();
+  try {
+    console.log('Login request:', req.body);
 
-  if (userError || !user) {
-    return res.send("Username or password not correct.");
-  }
+    const { data: user, error: userError } = await supabase
+      .from('user')
+      .select('*')
+      .eq('email', req.body.email)
+      .single();
 
-  const match = await authUser(req.body.password, user.password);
-  if (match) {
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role.name,
-      },
-      process.env.JWT_KEY
-    );
-    res.json(token);
-  } else {
-    res.send("Username or password not correct.");
+    console.log('User login:', user, 'User login error:', userError);
+
+    if (userError || !user) {
+      return res.status(400).send("Username or password not correct.");
+    }
+
+    const match = await authUser(req.body.password, user.password);
+    console.log('Password match:', match);
+
+    if (match) {
+      const token = jwt.sign(
+        {
+          id: user.id,
+        },
+        process.env.JWT_KEY
+      );
+      console.log('Generated token:', token);
+      res.json(token);
+    } else {
+      res.status(400).send("Username or password not correct.");
+    }
+  } catch (e) {
+    console.error('Login error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 }
 
 // Change user password
 async function changePass(req, res, next) {
-  // Verify old password
-  const { data: user, error: userError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('email', req.body.email)
-    .single();
+  try {
+    console.log('Change password request:', req.body);
 
-  if (userError || !user) {
-    return res.send("Wrong password!");
-  }
-
-  const match = await authUser(req.body.oldPassword, user.password);
-  if (match) {
-    const hashedNewPass = await hashPass(req.body.newPassword);
-    const { data: updatedUser, error: updateError } = await supabase
-      .from('users')
-      .update({ password: hashedNewPass })
+    // Verify old password
+    const { data: user, error: userError } = await supabase
+      .from('user')
+      .select('*')
       .eq('email', req.body.email)
       .single();
 
-    if (updateError) {
-      return res.status(500).json({ error: updateError.message });
+    console.log('User found for password change:', user, 'User error:', userError);
+
+    if (userError || !user) {
+      return res.status(400).send("Wrong password!");
     }
 
-    res.json(updatedUser);
-  } else {
-    res.send("Wrong password!");
+    const match = await authUser(req.body.oldPassword, user.password);
+    console.log('Old password match:', match);
+
+    if (match) {
+      const hashedNewPass = await hashPass(req.body.newPassword);
+      console.log('New hashed password:', hashedNewPass);
+
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('user')
+        .update({ password: hashedNewPass })
+        .eq('email', req.body.email)
+        .single();
+
+      console.log('Updated user:', updatedUser, 'Update error:', updateError);
+
+      if (updateError) {
+        return res.status(500).json({ error: updateError.message });
+      }
+
+      res.json(updatedUser);
+    } else {
+      res.status(400).send("Wrong password!");
+    }
+  } catch (e) {
+    console.error('Change password error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 }
 
 // Show user profile
 async function showUser(req, res, next) {
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('*, -password, -role')
-    .eq('id', req.query.userID)
-    .single();
+  try {
+    console.log('Show user profile request:', req.query);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    const { data: user, error } = await supabase
+      .from('user')
+      .select('*, -password')
+      .eq('id', req.query.userID)
+      .single();
+
+    console.log('User profile:', user, 'User profile error:', error);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.json(user);
+  } catch (e) {
+    console.error('Show user profile error:', e.message);
+    res.status(500).json({ error: e.message });
   }
-  res.json(user);
 }
 
 // Update user profile
 async function updateUser(req, res, next) {
   try {
+    console.log('Update user request:', req.body);
+
     // If there is a new avatar
     let avatarPath = null;
     if (req.file) {
       avatarPath = req.file.path; // Path update
       await supabase
-        .from('users')
+        .from('user')
         .update({ avatar: avatarPath })
         .eq('id', req.query.userID);
     }
 
     const { data: updatedUser, error: updateError } = await supabase
-      .from('users')
+      .from('user')
       .update({
         name: req.body.name,
         username: req.body.username,
@@ -164,13 +192,16 @@ async function updateUser(req, res, next) {
       .eq('id', req.query.userID)
       .single();
 
+    console.log('Updated user:', updatedUser, 'Update error:', updateError);
+
     if (updateError) {
       return res.status(500).json({ error: updateError.message });
     }
 
     res.send("User Updated!");
   } catch (e) {
-    console.log(e);
+    console.error('Update user profile error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 }
 

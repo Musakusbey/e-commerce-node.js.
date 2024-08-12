@@ -5,6 +5,7 @@ var cookieParser = require("cookie-parser");
 var logger = require("morgan");
 var cors = require("cors");
 require("dotenv").config();
+var supabase = require('./supabase');
 
 var mainRouter = require("./routes/main");
 var userRouter = require("./routes/user");
@@ -12,6 +13,11 @@ var adminRouter = require("./routes/admin");
 var sellerRouter = require("./routes/seller");
 
 var app = express();
+
+// Global Hata Yakalama Fonksiyonu
+process.on('uncaughtException', function (err) {
+  console.error('Caught exception: ' + err);
+});
 
 // Set base dir
 global.__basedir = __dirname;
@@ -26,6 +32,11 @@ app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// Root URL için basit bir yanıt
+app.get("/", (req, res) => {
+  res.send("Welcome to the E-commerce API");
+});
 
 app.use("/main", mainRouter);
 app.use("/user", userRouter);
@@ -49,6 +60,11 @@ app.use(function (err, req, res, next) {
     message: err.message,
     error: err,
   });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
 
 module.exports = app;

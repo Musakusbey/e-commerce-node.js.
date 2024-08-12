@@ -1,99 +1,186 @@
 const supabase = require('../../supabase');
 
-
-// Product Category Management =============================================
+// Product Category Management =================================================
 async function listProductCategory(req, res, next) {
-  const { data, error } = await supabase
-    .from('product_categories')
-    .select('*');
+  try {
+    const { data, error } = await supabase
+      .from('product_categories')
+      .select('*');
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('Caught Exception in listProductCategory:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data);
 }
 
 async function createProductCategory(req, res, next) {
-  const { data, error } = await supabase
-    .from('product_categories')
-    .insert([{ name: req.body.name }]);
+  try {
+    const { data, error } = await supabase
+      .from('product_categories')
+      .insert([{ name: req.body.name }]);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in createProductCategory:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data[0]);
 }
 
 async function updateProductCategory(req, res, next) {
-  const { data, error } = await supabase
-    .from('product_categories')
-    .update({ name: req.body.name })
-    .eq('id', req.query.id);
+  try {
+    const { data, error } = await supabase
+      .from('product_categories')
+      .update({ name: req.body.name })
+      .eq('id', req.query.id);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in updateProductCategory:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data[0]);
 }
 
 async function showProductCategory(req, res, next) {
-  const { data, error } = await supabase
-    .from('product_categories')
-    .select('*, products(*)')
-    .eq('id', req.query.id);
+  try {
+    const { data, error } = await supabase
+      .from('product_categories')
+      .select('*, products(*)')
+      .eq('id', req.query.id);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in showProductCategory:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data[0]);
 }
 
 async function deleteProductCategory(req, res, next) {
-  const { data, error } = await supabase
-    .from('product_categories')
-    .delete()
-    .eq('id', req.query.id);
+  try {
+    const { data, error } = await supabase
+      .from('product_categories')
+      .delete()
+      .eq('id', req.query.id);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in deleteProductCategory:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data[0]);
 }
 
-// Product Management =======================================================
+// Product Management ==========================================================
 async function listProduct(req, res, next) {
-  const { data, error } = await supabase
-    .from('products')
-    .select('*, categories(*)');
+  try {
+    const { data, error } = await supabase
+      .from('product')
+      .select('*');
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('Caught Exception in listProduct:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data);
+}
+
+async function createProduct(req, res, next) {
+  try {
+    console.log('Request Body:', req.body);
+    const { data, error } = await supabase
+      .from('product')
+      .insert([{
+        name: req.body.name,
+        price: req.body.price,
+        description: req.body.description,
+        images: req.body.images || [],
+        shop_id: req.body.shop_id,
+      }]);
+
+    if (error) {
+      console.error('Supabase Error:', error);
+      throw error;
+    }
+    console.log('Insert Data:', data);
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in createProduct:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
+  }
+}
+
+async function updateProduct(req, res, next) {
+  try {
+    const { data, error } = await supabase
+      .from('product')
+      .update({
+        name: req.body.name,
+        price: req.body.price,
+        description: req.body.description,
+        images: req.body.images || [],
+        shop_id: req.body.shop_id, // shop_id alanını güncelliyoruz
+      })
+      .eq('id', req.query.id);
+
+    if (error) {
+      throw error;
+    }
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in updateProduct:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
+  }
 }
 
 async function showProduct(req, res, next) {
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .eq('id', req.query.productID);
+  try {
+    const { data, error } = await supabase
+      .from('product')
+      .select('*')
+      .eq('id', req.query.id);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in showProduct:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data[0]);
 }
 
 async function deleteProduct(req, res, next) {
-  const { data, error } = await supabase
-    .from('products')
-    .delete()
-    .eq('id', req.query.id);
+  try {
+    const { data, error } = await supabase
+      .from('product')
+      .delete()
+      .eq('id', req.query.id);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      throw error;
+    }
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Caught Exception in deleteProduct:', err);
+    res.status(500).json({ error: 'Bir hata oluştu' });
   }
-  res.json(data[0]);
 }
 
 module.exports = {
@@ -103,6 +190,8 @@ module.exports = {
   showProductCategory,
   deleteProductCategory,
   listProduct,
+  createProduct,
+  updateProduct,
   showProduct,
   deleteProduct,
 };

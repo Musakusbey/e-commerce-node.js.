@@ -2,7 +2,6 @@ var express = require("express");
 var router = express.Router();
 
 // Site Management
-// Admin can list, create, update, show and delete site
 var {
   listSite,
   createSite,
@@ -18,7 +17,6 @@ router.get("/site/show", showSite);
 router.delete("/site/delete", deleteSite);
 
 // Role Management
-// Admin can list, create, update, show and delete role
 var {
   listRole,
   createRole,
@@ -33,8 +31,7 @@ router.put("/role/update", updateRole);
 router.get("/role/show", showRole);
 router.delete("/role/delete", deleteRole);
 
-// User Management
-// Admin can list, show, delete user and update user role
+// User Management 
 var {
   listUser,
   showUser,
@@ -48,7 +45,6 @@ router.delete("/user/delete", deleteUser);
 router.put("/user/update", updateUser);
 
 // Product Category Management
-// Admin can list, create, update, show or delete product category
 var {
   listProductCategory,
   createProductCategory,
@@ -64,7 +60,6 @@ router.get("/product/category/show", showProductCategory);
 router.delete("/product/category/delete", deleteProductCategory);
 
 // Shop Management
-// Admin can list, show or delete shop
 var { listShop, showShop, deleteShop } = require("../controllers/admin/shop");
 
 router.get("/shop/list", listShop);
@@ -72,27 +67,31 @@ router.get("/shop/show", showShop);
 router.delete("/shop/delete", deleteShop);
 
 // Product Management
-// Admin can list, show or delete product
 var {
   listProduct,
+  createProduct,
+  updateProduct,
   showProduct,
   deleteProduct,
 } = require("../controllers/admin/product");
 
 router.get("/product/list", listProduct);
+router.post("/product/create", createProduct);
+router.put("/product/update", updateProduct);
 router.get("/product/show", showProduct);
 router.delete("/product/delete", deleteProduct);
 
 // Product Review Management
-// Admin can list, show or delete product reviews
 var {
   listReview,
   showReview,
+  createReview,  // createReview rotasını ekledik
   deleteReview,
 } = require("../controllers/admin/review");
 
 router.get("/product/review/list", listReview);
 router.get("/product/review/show", showReview);
+router.post("/product/review/create", createReview);  // createReview rotasını ekledik
 router.delete("/product/review/delete", deleteReview);
 
 module.exports = router;
